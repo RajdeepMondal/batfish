@@ -1,0 +1,32 @@
+{
+  "class": "org.batfish.minesweeper.question.compareroutepolicystanzas.CompareRoutePolicyStanzasQuestion",
+  "differential": false,
+  "policy": "${policy}",
+  "nodes": "${nodes}",
+  "instance": {
+    "description": "Finds route announcements matched by multiple stanzas but treated differently",
+    "instanceName": "compareRoutePolicyStanzas",
+    "longDescription": "This question finds route announcements which are matched by more than 1 multiple stanzas but are treated differently by them. The comparison used a symbolic model of the route policy and finds _all_ differences between all pairs of stanzas. Same features supported as compareRoutePolicies.",
+    "orderedVariableNames": [
+      "policy",
+      "nodes"
+    ],
+    "tags": [
+      "routing"
+    ],
+    "variables": {
+      "policy": {
+        "description": "Only consider policies that match this description",
+        "type": "routingPolicySpec",
+        "optional": false,
+        "displayName": "Policy"
+      },
+      "nodes": {
+        "description": "Only examine policies on nodes matching this specifier",
+        "type": "nodeSpec",
+        "optional": true,
+        "displayName": "Nodes"
+      }
+    }
+  }
+}
