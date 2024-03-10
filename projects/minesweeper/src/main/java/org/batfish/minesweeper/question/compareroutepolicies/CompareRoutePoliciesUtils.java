@@ -182,7 +182,7 @@ public final class CompareRoutePoliciesUtils {
   private List<List<Statement>>  extractIfStatements(List<Statement> stanzas){
     // unroll the policy nested If statement into separate If statements
     List<List<Statement>> allPolicyStatements = new ArrayList<>();
-    allPolicyStatements.add(stanzas);
+    allPolicyStatements.add(new ArrayList<Statement>(stanzas));
 
     // RoutingPolicy getStatements() returns a List<Statement> containing only 1 element.
     // This is a nested If statement with the following components:
@@ -216,10 +216,10 @@ public final class CompareRoutePoliciesUtils {
     // Is this relevant enough for a pull request?
 
     // This function returns a List<Statement> containing only 1 nested If statement (why?)
-    List<Statement> stanzas = policy.getStatements();
+    List<Statement> stanzas = new ArrayList<Statement>(policy.getStatements());
 
     // TODO: remove this line later
-    System.out.println(stanzas);
+    // System.out.println(stanzas);
 
     Configuration owner = policy.getOwner();
     String name = policy.getName();
