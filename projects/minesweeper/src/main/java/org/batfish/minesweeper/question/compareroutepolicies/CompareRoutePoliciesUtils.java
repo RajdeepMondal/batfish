@@ -226,32 +226,36 @@ public final class CompareRoutePoliciesUtils {
 
     // Unroll the nested If statement into separated stanzas.
     if(stanzas.size() > 1){
+      // At this moment, only expect 1 statement in stanzas
       throw new BatfishException(
               String.format("%s: found more than one nested Ifs in policy.getStatements()", name));
-    }
-    List<List<Statement>> ifStatements = extractIfStatements(stanzas);
+    } else {
+      List<List<Statement>> ifStatements = extractIfStatements(stanzas);
 
-    List<RoutingPolicy> policies = new ArrayList<>();
+      List<RoutingPolicy> policies = new ArrayList<>();
 
-    int k = 0;
-    for(List<Statement> statement: ifStatements){
-      // Construct a new routing policy based on each separated stanza and label it accordingly
-      RoutingPolicy r = new RoutingPolicy(name + "_stanza" + Integer.toString(k), owner);
-      r.setStatements(statement);
-      policies.add(r);
-      k++;
-    }
-
-    List<Tuple<Result<BgpRoute>, Result<BgpRoute>>> diffs = new ArrayList<>();
-
-    // Compare every pair of policies(pi, pj) where pi != pj
-    for(int i=0;i<policies.size();i++){
-      for(int j=i+1;j<policies.size();j++){
-        diffs.addAll(comparePolicies(policies.get(i), policies.get(j), configAPs).collect(Collectors.toList()));
+      int k = 0;
+      for (List<Statement> statement : ifStatements) {
+        // Construct a new routing policy based on each separated stanza and label it accordingly
+        RoutingPolicy r = new RoutingPolicy(name + "_stanza" + Integer.toString(k), owner);
+        r.setStatements(statement);
+        policies.add(r);
+        k++;
       }
-    }
 
-    return diffs.stream();
+      List<Tuple<Result<BgpRoute>, Result<BgpRoute>>> diffs = new ArrayList<>();
+
+      // Compare every pair of policies(pi, pj) where pi != pj
+      for (int i = 0; i < policies.size(); i++) {
+        for (int j = i + 1; j < policies.size(); j++) {
+          diffs.addAll(
+              comparePolicies(policies.get(i), policies.get(j), configAPs)
+                  .collect(Collectors.toList()));
+        }
+      }
+
+      return diffs.stream();
+    }
   }
 
   /**
@@ -267,12 +271,12 @@ public final class CompareRoutePoliciesUtils {
    * @return all results from analyzing those route policies
    */
   private Stream<Tuple<Result<BgpRoute>, Result<BgpRoute>>> comparePoliciesForNode(
-          String node,
-          Stream<RoutingPolicy> policies,
-          Stream<RoutingPolicy> referencePolicies,
-          boolean crossPolicies,
-          NetworkSnapshot snapshot,
-          NetworkSnapshot reference) {
+      String node,
+      Stream<RoutingPolicy> policies,
+      Stream<RoutingPolicy> referencePolicies,
+      boolean crossPolicies,
+      NetworkSnapshot snapshot,
+      NetworkSnapshot reference) {
     List<RoutingPolicy> referencePoliciesList = referencePolicies.collect(Collectors.toList());
     List<RoutingPolicy> currentPoliciesList = policies.collect(Collectors.toList());
 
