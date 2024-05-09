@@ -260,7 +260,7 @@ public final class CompareRoutePoliciesUtils {
                                 new SetLocalPreference(new LiteralLong(300)), ReturnTrue.toStaticStatement()),
                         ImmutableList.of(ReturnFalse.toStaticStatement()));
 
-        RoutingPolicy r2 = new RoutingPolicy(router + Integer.toString(j), owner);
+        RoutingPolicy r2 = new RoutingPolicy(name + Integer.toString(j), owner);
         r2.setStatements(ImmutableList.of(if2));
 
         diffs.addAll(
