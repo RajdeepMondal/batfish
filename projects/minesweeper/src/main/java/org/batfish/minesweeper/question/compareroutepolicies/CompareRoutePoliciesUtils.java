@@ -1,5 +1,7 @@
 package org.batfish.minesweeper.question.compareroutepolicies;
 
+import static org.batfish.datamodel.routing_policy.statement.Statements.ReturnFalse;
+import static org.batfish.datamodel.routing_policy.statement.Statements.ReturnTrue;
 import static org.batfish.minesweeper.bdd.BDDRouteDiff.computeDifferences;
 import static org.batfish.minesweeper.bdd.ModelGeneration.constraintsToModel;
 import static org.batfish.minesweeper.bdd.ModelGeneration.satAssignmentToEnvironment;
@@ -8,10 +10,13 @@ import static org.batfish.specifier.NameRegexRoutingPolicySpecifier.ALL_ROUTING_
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
-import java.util.ArrayList;
-import java.util.Comparator;
+
 import java.util.List;
 import java.util.Set;
+import java.util.HashSet;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.ArrayList;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -30,9 +35,11 @@ import org.batfish.datamodel.LineAction;
 import org.batfish.datamodel.questions.BgpRoute;
 import org.batfish.datamodel.routing_policy.Environment;
 import org.batfish.datamodel.routing_policy.RoutingPolicy;
+import org.batfish.datamodel.routing_policy.expr.BooleanExpr;
+import org.batfish.datamodel.routing_policy.expr.LiteralLong;
 import org.batfish.datamodel.routing_policy.statement.If;
 import org.batfish.datamodel.routing_policy.statement.Statement;
-import org.batfish.datamodel.routing_policy.statement.Statements;
+import org.batfish.datamodel.routing_policy.statement.SetLocalPreference;
 import org.batfish.minesweeper.CommunityVar;
 import org.batfish.minesweeper.ConfigAtomicPredicates;
 import org.batfish.minesweeper.bdd.BDDRoute;
@@ -176,86 +183,125 @@ public final class CompareRoutePoliciesUtils {
                     node, null, null, policiesList);
 
     // compare the stanzas for each policy, compile them and return the results.
-    return policiesList.stream().flatMap(policy -> comparePolicyStanzas(policy, configAPs));
+    return policiesList.stream().flatMap(policy -> comparePolicyStanzas(policy, configAPs, snapshot, node));
   }
 
-  private List<List<Statement>>  extractIfStatements(List<Statement> stanzas){
-    // unroll the policy nested If statement into separate If statements
-    List<List<Statement>> allPolicyStatements = new ArrayList<>();
-    allPolicyStatements.add(new ArrayList<Statement>(stanzas));
-
-    // RoutingPolicy getStatements() returns a List<Statement> containing only 1 element.
-    // This is a nested If statement with the following components:
-    //  1. _guard
-    //  2. _trueStatements (which is of type List<Statement>) -> when _guard is satisfied, take the action under that stanza (this can call other route maps, set attributes, permit/deny)
-    //  3. _falseStatements (which is of type List<Statement>) -> when _guard is not satisfied, go to the next stanza in the route map (this could be another If statement corresponding to the next stanza in the route map or a default action)
-    List<Statement> _falseStatements = ((If)stanzas.get(0)).getFalseStatements();
-
-    while(!(_falseStatements.get(0) instanceof Statements.StaticStatement)){
-      allPolicyStatements.add(_falseStatements);
-      _falseStatements = ((If) _falseStatements.get(0)).getFalseStatements();
-    }
-
-    List<Statement> finalStatement = _falseStatements;
-
-    // replace the false branch of each If statement with the default action
-    for(List<Statement> state: allPolicyStatements){
-      ((If)state.get(0)).setFalseStatements(finalStatement);
-    }
-
-    return allPolicyStatements;
-  }
+//  private List<List<Statement>>  extractIfStatements(List<Statement> stanzas){
+//    // unroll the policy nested If statement into separate If statements
+//    List<List<Statement>> allPolicyStatements = new ArrayList<>();
+//    allPolicyStatements.add(new ArrayList<Statement>(stanzas));
+//
+//    // RoutingPolicy getStatements() returns a List<Statement> containing only 1 element.
+//    // This is a nested If statement with the following components:
+//    //  1. _guard
+//    //  2. _trueStatements (which is of type List<Statement>) -> when _guard is satisfied, take the action under that stanza (this can call other route maps, set attributes, permit/deny)
+//    //  3. _falseStatements (which is of type List<Statement>) -> when _guard is not satisfied, go to the next stanza in the route map (this could be another If statement corresponding to the next stanza in the route map or a default action)
+//    List<Statement> _falseStatements = ((If)stanzas.get(0)).getFalseStatements();
+//
+//    while(!(_falseStatements.get(0) instanceof Statements.StaticStatement)){
+//      allPolicyStatements.add(_falseStatements);
+//      _falseStatements = ((If) _falseStatements.get(0)).getFalseStatements();
+//    }
+//
+//    List<Statement> finalStatement = _falseStatements;
+//
+//    // replace the false branch of each If statement with the default action
+//    for(List<Statement> state: allPolicyStatements){
+//      ((If)state.get(0)).setFalseStatements(finalStatement);
+//    }
+//
+//    return allPolicyStatements;
+//  }
 
   private Stream<Tuple<Result<BgpRoute>, Result<BgpRoute>>> comparePolicyStanzas(
           RoutingPolicy policy,
-          ConfigAtomicPredicates configAPs){
-
-    // Questions:
-    // Why is every Routing Policy object stored as a List<Statement> containing only 1 element?
-    // Why compute atomic predicates on the original configuration? Don't separated stanzas result in different atomic predicates?
-    // Is this relevant enough for a pull request?
-
-    // This function returns a List<Statement> containing only 1 nested If statement (why?)
-    List<Statement> stanzas = new ArrayList<Statement>(policy.getStatements());
-
-    // TODO: remove this line later
-    // System.out.println(stanzas);
-
+          ConfigAtomicPredicates configAPs,
+          NetworkSnapshot snapshot,
+          String router){
+    List<Statement> stanzas = policy.getStatements();
     Configuration owner = policy.getOwner();
     String name = policy.getName();
+    Configuration configuration = _batfish.loadConfigurations(snapshot).get(router);
 
-    // Unroll the nested If statement into separated stanzas.
-    if(stanzas.size() > 1){
-      // At this moment, only expect 1 statement in stanzas
-      throw new BatfishException(
-              String.format("%s: found more than one nested Ifs in policy.getStatements()", name));
-    } else {
-      List<List<Statement>> ifStatements = extractIfStatements(stanzas);
+    // System.out.println(stanzas);
 
-      List<RoutingPolicy> policies = new ArrayList<>();
+    Set<BooleanExpr> allIfGuards = new HashSet<>();
+    stanzas.forEach(
+            stmt ->
+                    allIfGuards.addAll(
+                            stmt.accept(
+                                    new RoutePolicyIfGuardCollector(),
+                                    new Tuple<>(
+                                            new HashSet<>(Collections.singleton(policy.getName())), configuration))));
 
-      int k = 0;
-      for (List<Statement> statement : ifStatements) {
-        // Construct a new routing policy based on each separated stanza and label it accordingly
-        RoutingPolicy r = new RoutingPolicy(name + "_stanza" + Integer.toString(k), owner);
-        r.setStatements(statement);
-        policies.add(r);
-        k++;
+    List<BooleanExpr> guards = new ArrayList<>(allIfGuards);
+    // System.out.println(guards);
+
+    List<Tuple<Result<BgpRoute>, Result<BgpRoute>>> diffs = new ArrayList<>();
+
+    for (int i = 0; i < guards.size(); i++) {
+      BooleanExpr _guard1 = guards.get(i);
+      If if1 =
+              new If(
+                      _guard1,
+                      ImmutableList.of(
+                              new SetLocalPreference(new LiteralLong(200)), ReturnTrue.toStaticStatement()),
+                      ImmutableList.of(ReturnFalse.toStaticStatement()));
+
+      RoutingPolicy r1 = new RoutingPolicy(name + Integer.toString(i), owner);
+      r1.setStatements(ImmutableList.of(if1));
+
+      for (int j = i + 1; j < guards.size(); j++) {
+        BooleanExpr _guard2 = guards.get(j);
+        If if2 =
+                new If(
+                        _guard2,
+                        ImmutableList.of(
+                                new SetLocalPreference(new LiteralLong(300)), ReturnTrue.toStaticStatement()),
+                        ImmutableList.of(ReturnFalse.toStaticStatement()));
+
+        RoutingPolicy r2 = new RoutingPolicy(router + Integer.toString(j), owner);
+        r2.setStatements(ImmutableList.of(if2));
+
+        diffs.addAll(
+                comparePolicies(r1, r2, configAPs)
+                        .collect(Collectors.toList()));
       }
-
-      List<Tuple<Result<BgpRoute>, Result<BgpRoute>>> diffs = new ArrayList<>();
-
-      // Compare every pair of policies(pi, pj) where pi != pj
-      for (int i = 0; i < policies.size(); i++) {
-        for (int j = i + 1; j < policies.size(); j++) {
-          diffs.addAll(
-              comparePolicies(policies.get(i), policies.get(j), configAPs)
-                  .collect(Collectors.toList()));
-        }
-      }
-
-      return diffs.stream();
     }
+
+//    if(stanzas.size() > 1){
+//      // At this moment, only expect 1 statement in stanzas
+//      throw new BatfishException(
+//              String.format("%s: found more than one nested Ifs in policy.getStatements()", name));
+//    } else {
+//      List<List<Statement>> ifStatements = extractIfStatements(stanzas);
+//
+//      List<RoutingPolicy> policies = new ArrayList<>();
+//
+//      int k = 0;
+//      for (List<Statement> statement : ifStatements) {
+//        // Construct a new routing policy based on each separated stanza and label it accordingly
+//        RoutingPolicy r = new RoutingPolicy(name + "_stanza" + Integer.toString(k), owner);
+//        r.setStatements(statement);
+//        policies.add(r);
+//        k++;
+//      }
+//
+//      List<Tuple<Result<BgpRoute>, Result<BgpRoute>>> diffs2 = new ArrayList<>();
+//
+//      // Compare every pair of policies(pi, pj) where pi != pj
+//      for (int i = 0; i < policies.size(); i++) {
+//        for (int j = i + 1; j < policies.size(); j++) {
+//          diffs2.addAll(
+//              comparePolicies(policies.get(i), policies.get(j), configAPs)
+//                  .collect(Collectors.toList()));
+//        }
+//      }
+//
+//      return diffs2.stream();
+//    }
+
+    return diffs.stream();
   }
 
   /**
@@ -271,12 +317,12 @@ public final class CompareRoutePoliciesUtils {
    * @return all results from analyzing those route policies
    */
   private Stream<Tuple<Result<BgpRoute>, Result<BgpRoute>>> comparePoliciesForNode(
-      String node,
-      Stream<RoutingPolicy> policies,
-      Stream<RoutingPolicy> referencePolicies,
-      boolean crossPolicies,
-      NetworkSnapshot snapshot,
-      NetworkSnapshot reference) {
+          String node,
+          Stream<RoutingPolicy> policies,
+          Stream<RoutingPolicy> referencePolicies,
+          boolean crossPolicies,
+          NetworkSnapshot snapshot,
+          NetworkSnapshot reference) {
     List<RoutingPolicy> referencePoliciesList = referencePolicies.collect(Collectors.toList());
     List<RoutingPolicy> currentPoliciesList = policies.collect(Collectors.toList());
 
