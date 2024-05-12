@@ -301,7 +301,16 @@ public final class CompareRoutePoliciesUtils {
 //      return diffs2.stream();
 //    }
 
-    return diffs.stream();
+
+    List<Tuple<Result<BgpRoute>, Result<BgpRoute>>> overlaps = new ArrayList<>();
+
+    for(Tuple<Result<BgpRoute>, Result<BgpRoute>> diff: diffs){
+      if(diff.getFirst().getAction() == LineAction.PERMIT
+          && diff.getSecond().getAction() == LineAction.PERMIT)
+        overlaps.add(diff);
+    }
+
+    return overlaps.stream();
   }
 
   /**
