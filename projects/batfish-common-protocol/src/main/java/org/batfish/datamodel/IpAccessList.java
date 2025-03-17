@@ -185,10 +185,15 @@ public class IpAccessList implements Serializable {
   public String toString() {
     StringBuilder output =
         new StringBuilder().append(getClass().getSimpleName()).append(":").append(_name);
+
+    output.append("Source Name:" + _sourceName + "\n");
+    output.append("Source Type:" + _sourceType);
     for (AclLine line : _lines) {
       output.append("\n");
       output.append(line);
     }
+
+
     return output.toString();
   }
 

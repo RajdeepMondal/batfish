@@ -89,6 +89,10 @@ public class CompareFiltersAnswerer extends Answerer {
             currentFilters,
             entry -> referenceFilters.containsEntry(entry.getKey(), entry.getValue()));
 
+    // printing out the commonFilters multimap to see the contents
+    System.out.println("The common filters are");
+    System.out.println(commonFilters);
+
     BDDPacket bddPacket = new BDDPacket();
     Multiset<Row> rows =
         commonFilters.entries().stream()
@@ -108,16 +112,22 @@ public class CompareFiltersAnswerer extends Answerer {
     return table;
   }
 
-  private static Row toRow(
+  public static Row toRow(
       FilterDifference difference,
       SpecifierContext currentContext,
       SpecifierContext referenceContext) {
 
+//    System.out.println("Filter difference:");
+//    System.out.println(difference.getHostname());
+//    System.out.println(difference.getFilterName());
+//    System.out.println(difference.getCurrentIndex());
+//    System.out.println(difference.getReferenceIndex());
     Row.TypedRowBuilder ret = Row.builder(metadata().toColumnMap());
 
     String hostname = difference.getHostname();
     String filtername = difference.getFilterName();
     ret.put(COL_NODE, new Node(hostname)).put(COL_FILTER_NAME, filtername);
+
 
     if (difference.getCurrentIndex() == null) {
       ret.put(COL_CURRENT_LINE, END_OF_ACL)
@@ -167,6 +177,11 @@ public class CompareFiltersAnswerer extends Answerer {
     Map<String, IpAccessList> currentAcls = currentConfig.getIpAccessLists();
     Map<String, IpSpace> currentIpSpaces = currentConfig.getIpSpaces();
     IpAccessList currentAcl = currentAcls.get(filtername);
+
+    for(String s: currentAcls.keySet()){
+      System.out.println(s + " " + currentAcls.get(s));
+    }
+
     BDDSourceManager srcMgr =
         differentialBDDSourceManager(
             bddPacket,

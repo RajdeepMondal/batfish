@@ -1,0 +1,33 @@
+{
+  "class": "org.batfish.question.comparefilterrules.CompareFilterRulesQuestion",
+  "differential": false,
+  "filters": "${filters}",
+  "nodes": "${nodes}",
+  "instance": {
+    "description": "Compares filter rules in the current snapshot. Returns pairs of lines that match the same flow(s) but treat them differently (i.e. one permits and the other denies the flow).",
+    "instanceName": "compareFilterRules",
+    "longDescription": "This question can be used to summarize how different rules within a filter overlap among each other. It outputs a table that contains pairs of lines where one of them permits a flow while the other denies it.",
+    "orderedVariableNames": [
+      "filters",
+      "nodes"
+    ],
+    "tags": [
+      "dataplane",
+      "acl"
+    ],
+    "variables": {
+      "filters": {
+        "description": "Only evaluate filters that match this filter specifier",
+        "optional": false,
+        "type": "filterSpec",
+        "displayName": "Filters"
+      },
+      "nodes": {
+        "description": "Only evaluate filters present on nodes matching this node specifier",
+        "optional": true,
+        "type": "nodeSpec",
+        "displayName": "Nodes"
+      }
+    }
+  }
+}

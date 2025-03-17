@@ -344,13 +344,15 @@ public final class SearchRoutePoliciesAnswerer extends Answerer {
    */
   private BDD asPathRegexConstraintListToBDD(
       List<RegexConstraint> regexConstraints, ConfigAtomicPredicates configAPs, BDDRoute route) {
-    return TransferBDD.asPathRegexesToBDD(
+    BDD bdd =  TransferBDD.asPathRegexesToBDD(
         regexConstraints.stream()
             .map(RegexConstraint::getRegex)
             .map(SymbolicAsPathRegex::new)
             .collect(Collectors.toSet()),
         configAPs.getAsPathRegexAtomicPredicates().getRegexAtomicPredicates(),
         route);
+
+    return bdd;
   }
 
   /**
@@ -395,7 +397,7 @@ public final class SearchRoutePoliciesAnswerer extends Answerer {
    * @return the overall constraint as a BDD
    */
   private BDD communityRegexConstraintsToBDD(
-      RegexConstraints regexes, TransferBDD tbdd, BDDRoute route) {
+      RegexConstraints regexes, boolean complementCommunity, TransferBDD tbdd, BDDRoute route) {
 
     BDDFactory factory = tbdd.getFactory();
 
@@ -417,7 +419,13 @@ public final class SearchRoutePoliciesAnswerer extends Answerer {
                 .map(r -> communityRegexConstraintToBDD(r, tbdd, route))
                 .collect(ImmutableSet.toImmutableSet()));
 
-    return positiveConstraints.diffWith(negativeConstraints);
+    BDD result = positiveConstraints.diffWith(negativeConstraints);
+
+    if(complementCommunity){
+      result = result.not();
+    }
+
+    return result;
   }
 
   /**
@@ -434,7 +442,7 @@ public final class SearchRoutePoliciesAnswerer extends Answerer {
    * @return a BDD representing atomic predicates that satisfy the given regex constraints
    */
   private BDD outputAsPathConstraintsToBDDAndUpdatedAPs(
-      RegexConstraints asPathRegexes, ConfigAtomicPredicates configAPs, BDDRoute r) {
+      RegexConstraints asPathRegexes, boolean complementAsPath, ConfigAtomicPredicates configAPs, BDDRoute r) {
     // update the atomic predicates to include any prepended ASes and then to constrain them to
     // satisfy the given regex constraints
     AsPathRegexAtomicPredicates aps = configAPs.getAsPathRegexAtomicPredicates();
@@ -445,12 +453,18 @@ public final class SearchRoutePoliciesAnswerer extends Answerer {
     // these are the atomic predicates that satisfy the given regex constraints
     Map<Integer, Automaton> apAutomata = aps.getAtomicPredicateAutomata();
     BDDDomain<Integer> apBDDs = r.getAsPathRegexAtomicPredicates();
-    return r.getFactory()
+    BDD result = r.getFactory()
         .orAll(
             apAutomata.keySet().stream()
                 .filter(i -> !apAutomata.get(i).isEmpty())
                 .map(apBDDs::value)
                 .collect(ImmutableSet.toImmutableSet()));
+
+    if(complementAsPath){
+      result = result.not();
+    }
+
+    return result;
   }
 
   private <T> BDD setToBDD(Set<T> set, BDDRoute bddRoute, BDDDomain<T> bddDomain) {
@@ -476,23 +490,34 @@ public final class SearchRoutePoliciesAnswerer extends Answerer {
     result.andWith(longSpaceToBDD(constraints.getLocalPreference(), r.getLocalPref()));
     result.andWith(longSpaceToBDD(constraints.getMed(), r.getMed()));
     result.andWith(longSpaceToBDD(constraints.getTag(), r.getTag()));
-    result.andWith(communityRegexConstraintsToBDD(constraints.getCommunities(), tbdd, r));
+    result.andWith(communityRegexConstraintsToBDD(constraints.getCommunities(), constraints.getComplementCommunity(), tbdd, r));
     if (outputRoute) {
       // AS-path constraints on the output route need to take any prepends into account
       result.andWith(
-          outputAsPathConstraintsToBDDAndUpdatedAPs(constraints.getAsPath(), configAPs, r));
+          outputAsPathConstraintsToBDDAndUpdatedAPs(constraints.getAsPath(), constraints.getComplementAsPath(), configAPs, r));
     } else {
       List<RegexConstraint> pos = constraints.getAsPath().getPositiveRegexConstraints();
       List<RegexConstraint> neg = constraints.getAsPath().getNegativeRegexConstraints();
       // convert the positive and negative constraints to BDDs and return their difference;
       // if the positive constraints are empty then treat it as logically true
-      result.andWith(
-          (pos.isEmpty() ? r.getFactory().one() : asPathRegexConstraintListToBDD(pos, configAPs, r))
-              .diffWith(asPathRegexConstraintListToBDD(neg, configAPs, r)));
+      BDD asPathBDD = (pos.isEmpty() ? r.getFactory().one() : asPathRegexConstraintListToBDD(pos, configAPs, r))
+              .diffWith(asPathRegexConstraintListToBDD(neg, configAPs, r));
+
+      if(constraints.getComplementAsPath()){
+        asPathBDD = asPathBDD.not();
+      }
+
+      result.andWith(asPathBDD);
     }
+
+    if (constraints.getComplementConstraints()){
+      result = result.not();
+    }
+
     result.andWith(nextHopIpConstraintsToBDD(constraints.getNextHopIp(), r, outputRoute));
     result.andWith(setToBDD(constraints.getOriginType(), r, r.getOriginType()));
     result.andWith(setToBDD(constraints.getProtocol(), r, r.getProtocolHistory()));
+
 
     return result;
   }

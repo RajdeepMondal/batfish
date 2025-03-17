@@ -31,15 +31,18 @@ public class BgpRouteConstraints {
   private static final String PROP_MED = "med";
   private static final String PROP_TAG = "tag";
   private static final String PROP_COMMUNITIES = "communities";
+  private static final String PROP_COMPLEMENT_COMMUNITY = "complementCommunity";
   private static final String PROP_AS_PATH = "asPath";
+  private static final String PROP_COMPLEMENT_AS_PATH = "complementAsPath";
   private static final String PROP_NEXT_HOP_IP = "nextHopIp";
 
   private static final String PROP_ORIGIN_TYPE = "originType";
   private static final String PROP_PROTOCOL = "protocol";
+  private static final String PROP_COMPLEMENT_CONSTRAINTS = "complementConstraints";
 
   // the announcement's prefix must be within this space
   private final @Nonnull PrefixSpace _prefix;
-  // if this flag is set, then the prefix must be outside of the above space
+  // if this flag is set, then the prefix must be outside the above space
   private final boolean _complementPrefix;
   // the announcement's local preference must be within this range
   private final @Nonnull LongSpace _localPreference;
@@ -49,8 +52,12 @@ public class BgpRouteConstraints {
   private final @Nonnull LongSpace _tag;
   // the announcement's communities must satisfy these constraints
   private final @Nonnull RegexConstraints _communities;
+  // if this flag is set, then the communities must not match any of the above RegexConstraints
+  private final boolean _complementCommunity;
   // the announcement's AS path must satisfy these constraints
   private final @Nonnull RegexConstraints _asPath;
+  // if this flag is set, then the asPath must not match any of the above RegexConstraints
+  private final boolean _complementAsPath;
   // the announcement's next-hop IP must be within this prefix;
   // an empty value means that any next-hop IP is ok, including
   // an unset one
@@ -59,6 +66,8 @@ public class BgpRouteConstraints {
   private final @Nonnull Set<OriginType> _originType;
   // the announcement's protocol must be a member of this set
   private final @Nonnull Set<RoutingProtocol> _protocol;
+  // if this flag is set, then the route constraints must be the complement of the above values
+  private final boolean _complementConstraints;
 
   private static final LongSpace THIRTY_TWO_BIT_RANGE =
       LongSpace.builder().including(Range.closed(0L, 4294967295L)).build();
@@ -71,10 +80,13 @@ public class BgpRouteConstraints {
       @JsonProperty(PROP_MED) @Nullable LongSpace.Builder med,
       @JsonProperty(PROP_TAG) @Nullable LongSpace.Builder tag,
       @JsonProperty(PROP_COMMUNITIES) @Nullable RegexConstraints communities,
+      @JsonProperty(PROP_COMPLEMENT_COMMUNITY) boolean complementCommunity,
       @JsonProperty(PROP_AS_PATH) @Nullable RegexConstraints asPath,
+      @JsonProperty(PROP_COMPLEMENT_AS_PATH) boolean complementAsPath,
+      @JsonProperty(PROP_COMPLEMENT_CONSTRAINTS) boolean complementConstraints,
       @JsonProperty(PROP_NEXT_HOP_IP) @Nullable Prefix nextHopIp,
       @JsonProperty(PROP_ORIGIN_TYPE) @Nullable Set<OriginType> originType,
-      @JsonProperty(PROP_PROTOCOL) @Nullable Set<RoutingProtocol> protocol) {
+      @JsonProperty(PROP_PROTOCOL) @Nullable Set<RoutingProtocol> protocol){
     this(
         prefix,
         complementPrefix,
@@ -82,7 +94,10 @@ public class BgpRouteConstraints {
         processBuilder(med),
         processBuilder(tag),
         communities,
+        complementCommunity,
         asPath,
+        complementAsPath,
+        complementConstraints,
         nextHopIp,
         originType,
         protocol);
@@ -95,7 +110,10 @@ public class BgpRouteConstraints {
       @Nullable LongSpace med,
       @Nullable LongSpace tag,
       @Nullable RegexConstraints communities,
+      boolean complementCommunity,
       @Nullable RegexConstraints asPath,
+      boolean complementAsPath,
+      boolean complementConstraints,
       @Nullable Prefix nextHopIp,
       @Nullable Set<OriginType> originType,
       @Nullable Set<RoutingProtocol> protocol) {
@@ -109,6 +127,10 @@ public class BgpRouteConstraints {
     _nextHopIp = Optional.ofNullable(nextHopIp);
     _originType = firstNonNull(originType, ImmutableSet.of());
     _protocol = firstNonNull(protocol, ImmutableSet.of());
+    _complementCommunity = complementCommunity;
+    _complementAsPath = complementAsPath;
+    _complementConstraints = complementConstraints;
+
     validate(this);
   }
 
@@ -159,10 +181,14 @@ public class BgpRouteConstraints {
     private LongSpace _med;
     private LongSpace _tag;
     private RegexConstraints _communities;
+    private boolean _complementCommunity;
     private RegexConstraints _asPath;
+    private boolean _complementAsPath;
     private Prefix _nextHopIp;
     private Set<OriginType> _originType;
     private Set<RoutingProtocol> _protocol;
+    private boolean _complementConstraints;
+
 
     private Builder() {}
 
@@ -196,8 +222,18 @@ public class BgpRouteConstraints {
       return this;
     }
 
+    public Builder setComplementCommunity(boolean complementCommunity){
+      _complementCommunity = complementCommunity;
+      return this;
+    }
+
     public Builder setAsPath(RegexConstraints asPath) {
       _asPath = asPath;
+      return this;
+    }
+
+    public Builder setComplementAsPath(boolean complementAsPath){
+      _complementAsPath = complementAsPath;
       return this;
     }
 
@@ -216,6 +252,11 @@ public class BgpRouteConstraints {
       return this;
     }
 
+    public Builder setComplementConstraints(boolean complementConstraints){
+      _complementConstraints = complementConstraints;
+      return this;
+    }
+
     public BgpRouteConstraints build() {
       return new BgpRouteConstraints(
           _prefix,
@@ -224,7 +265,10 @@ public class BgpRouteConstraints {
           _med,
           _tag,
           _communities,
+          _complementCommunity,
           _asPath,
+          _complementAsPath,
+          _complementConstraints,
           _nextHopIp,
           _originType,
           _protocol);
@@ -249,10 +293,13 @@ public class BgpRouteConstraints {
         && Objects.equals(_med, other._med)
         && Objects.equals(_tag, other._tag)
         && Objects.equals(_communities, other._communities)
+            && Objects.equals(_complementCommunity, other._complementCommunity)
         && Objects.equals(_asPath, other._asPath)
+            && Objects.equals(_complementAsPath, other._complementAsPath)
         && Objects.equals(_nextHopIp, other._nextHopIp)
         && Objects.equals(_originType, other._originType)
-        && Objects.equals(_protocol, other._protocol);
+        && Objects.equals(_protocol, other._protocol)
+            && Objects.equals(_complementConstraints, other._complementConstraints);
   }
 
   @JsonProperty(PROP_PREFIX)
@@ -285,10 +332,16 @@ public class BgpRouteConstraints {
     return _communities;
   }
 
+  @JsonProperty(PROP_COMPLEMENT_COMMUNITY)
+  public boolean getComplementCommunity() { return _complementCommunity; }
+
   @JsonProperty(PROP_AS_PATH)
   public @Nonnull RegexConstraints getAsPath() {
     return _asPath;
   }
+
+  @JsonProperty(PROP_COMPLEMENT_AS_PATH)
+  public boolean getComplementAsPath() { return _complementAsPath; }
 
   @JsonProperty(PROP_NEXT_HOP_IP)
   public @Nonnull Optional<Prefix> getNextHopIp() {
@@ -305,6 +358,9 @@ public class BgpRouteConstraints {
     return _protocol;
   }
 
+  @JsonProperty(PROP_COMPLEMENT_CONSTRAINTS)
+  public boolean getComplementConstraints() { return _complementConstraints; }
+
   @Override
   public int hashCode() {
     return Objects.hash(
@@ -314,9 +370,11 @@ public class BgpRouteConstraints {
         _med,
         _tag,
         _communities,
+        _complementCommunity,
         _asPath,
+        _complementAsPath,
         _nextHopIp,
         _originType,
-        _protocol);
+        _protocol, _complementConstraints);
   }
 }
