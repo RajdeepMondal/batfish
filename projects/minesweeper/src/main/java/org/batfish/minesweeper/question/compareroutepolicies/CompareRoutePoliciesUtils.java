@@ -185,34 +185,6 @@ public final class CompareRoutePoliciesUtils {
     // compare the stanzas for each policy, compile them and return the results.
     return policiesList.stream().flatMap(policy -> comparePolicyStanzas(policy, configAPs, snapshot, node));
   }
-
-//  private List<List<Statement>>  extractIfStatements(List<Statement> stanzas){
-//    // unroll the policy nested If statement into separate If statements
-//    List<List<Statement>> allPolicyStatements = new ArrayList<>();
-//    allPolicyStatements.add(new ArrayList<Statement>(stanzas));
-//
-//    // RoutingPolicy getStatements() returns a List<Statement> containing only 1 element.
-//    // This is a nested If statement with the following components:
-//    //  1. _guard
-//    //  2. _trueStatements (which is of type List<Statement>) -> when _guard is satisfied, take the action under that stanza (this can call other route maps, set attributes, permit/deny)
-//    //  3. _falseStatements (which is of type List<Statement>) -> when _guard is not satisfied, go to the next stanza in the route map (this could be another If statement corresponding to the next stanza in the route map or a default action)
-//    List<Statement> _falseStatements = ((If)stanzas.get(0)).getFalseStatements();
-//
-//    while(!(_falseStatements.get(0) instanceof Statements.StaticStatement)){
-//      allPolicyStatements.add(_falseStatements);
-//      _falseStatements = ((If) _falseStatements.get(0)).getFalseStatements();
-//    }
-//
-//    List<Statement> finalStatement = _falseStatements;
-//
-//    // replace the false branch of each If statement with the default action
-//    for(List<Statement> state: allPolicyStatements){
-//      ((If)state.get(0)).setFalseStatements(finalStatement);
-//    }
-//
-//    return allPolicyStatements;
-//  }
-
   private Stream<Tuple<Result<BgpRoute>, Result<BgpRoute>>> comparePolicyStanzas(
           RoutingPolicy policy,
           ConfigAtomicPredicates configAPs,
@@ -222,8 +194,6 @@ public final class CompareRoutePoliciesUtils {
     Configuration owner = policy.getOwner();
     String name = policy.getName();
     Configuration configuration = _batfish.loadConfigurations(snapshot).get(router);
-
-    // System.out.println(stanzas);
 
     Set<BooleanExpr> allIfGuards = new HashSet<>();
     stanzas.forEach(
@@ -263,44 +233,23 @@ public final class CompareRoutePoliciesUtils {
         RoutingPolicy r2 = new RoutingPolicy(name + Integer.toString(j), owner);
         r2.setStatements(ImmutableList.of(if2));
 
-        diffs.addAll(
-                comparePolicies(r1, r2, configAPs)
-                        .collect(Collectors.toList()));
+        // The following try-catch block ensures that execution does not stop
+        // if the code encounters a "No Implementation" error
+        // e.g. MatchColor.evaluate is not implemented and raises an exception
+        // if Batfish encounters such a match statement
+        // This code block simply prints out the error and moves to the next pair
+        // for comparison
+        try{
+          List<Tuple<Result<BgpRoute>, Result<BgpRoute>>> curDiff =
+                  comparePolicies(r1, r2, configAPs).collect(Collectors.toList());
+
+          diffs.addAll(curDiff);
+        }
+        catch (BatfishException e){
+          System.out.println("Ignoring error message:" + e.getMessage());
+        }
       }
     }
-
-//    if(stanzas.size() > 1){
-//      // At this moment, only expect 1 statement in stanzas
-//      throw new BatfishException(
-//              String.format("%s: found more than one nested Ifs in policy.getStatements()", name));
-//    } else {
-//      List<List<Statement>> ifStatements = extractIfStatements(stanzas);
-//
-//      List<RoutingPolicy> policies = new ArrayList<>();
-//
-//      int k = 0;
-//      for (List<Statement> statement : ifStatements) {
-//        // Construct a new routing policy based on each separated stanza and label it accordingly
-//        RoutingPolicy r = new RoutingPolicy(name + "_stanza" + Integer.toString(k), owner);
-//        r.setStatements(statement);
-//        policies.add(r);
-//        k++;
-//      }
-//
-//      List<Tuple<Result<BgpRoute>, Result<BgpRoute>>> diffs2 = new ArrayList<>();
-//
-//      // Compare every pair of policies(pi, pj) where pi != pj
-//      for (int i = 0; i < policies.size(); i++) {
-//        for (int j = i + 1; j < policies.size(); j++) {
-//          diffs2.addAll(
-//              comparePolicies(policies.get(i), policies.get(j), configAPs)
-//                  .collect(Collectors.toList()));
-//        }
-//      }
-//
-//      return diffs2.stream();
-//    }
-
 
     List<Tuple<Result<BgpRoute>, Result<BgpRoute>>> overlaps = new ArrayList<>();
 
