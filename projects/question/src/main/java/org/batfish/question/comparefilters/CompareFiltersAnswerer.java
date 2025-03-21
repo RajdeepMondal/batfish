@@ -90,8 +90,8 @@ public class CompareFiltersAnswerer extends Answerer {
             entry -> referenceFilters.containsEntry(entry.getKey(), entry.getValue()));
 
     // printing out the commonFilters multimap to see the contents
-    System.out.println("The common filters are");
-    System.out.println(commonFilters);
+//    System.out.println("The common filters are");
+//    System.out.println(commonFilters);
 
     BDDPacket bddPacket = new BDDPacket();
     Multiset<Row> rows =

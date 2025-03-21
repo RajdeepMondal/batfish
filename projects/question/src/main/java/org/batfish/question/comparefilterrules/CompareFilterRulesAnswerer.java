@@ -13,9 +13,9 @@ import org.batfish.common.bdd.IpAccessListToBdd;
 import org.batfish.common.bdd.IpAccessListToBddImpl;
 import org.batfish.common.bdd.PermitAndDenyBdds;
 import org.batfish.common.plugin.IBatfish;
+import org.batfish.datamodel.IpAccessList;
 import org.batfish.datamodel.AclLine;
 import org.batfish.datamodel.Configuration;
-import org.batfish.datamodel.IpAccessList;
 import org.batfish.datamodel.IpSpace;
 import org.batfish.datamodel.answers.AnswerElement;
 import org.batfish.datamodel.answers.Schema;
@@ -57,7 +57,10 @@ public class CompareFilterRulesAnswerer extends Answerer {
 
     public AnswerElement answer(NetworkSnapshot snapshot){
         SpecifierContext currentContext = _batfish.specifierContext(_batfish.getSnapshot());
+//        Configuration currentConfig = currentContext.getConfigs().get(_question.getNodes());
+//        Map<String, IpAccessList> currentAcls = currentConfig.getIpAccessLists();
 
+//        System.out.println(currentAcls);
         // Retrieve the desired ACLs
         Multimap<String, String> currentFilters =
                 getSpecifiedFilters(
