@@ -108,7 +108,7 @@ public class CompareFiltersAnswerer extends Answerer {
     return table;
   }
 
-  private static Row toRow(
+  public static Row toRow(
       FilterDifference difference,
       SpecifierContext currentContext,
       SpecifierContext referenceContext) {
